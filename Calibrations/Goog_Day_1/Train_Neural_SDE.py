@@ -34,7 +34,7 @@ class Net_LSV(nn.Module):
         network for each maturity is used to hedge only options for that maturity, for example network corresponding to final maturity
         is used to simulate hedging strategy (from time 0) for vanilla options at the final maturity
         """
-        self.vanilla_hedge = Net_timegrid(dim=2, nOut=n_strikes, n_layers=2, vNetWidth=20, n_networks=n_maturities, activation_output="softplus")
+        self.vanilla_hedge = Net_timegrid(dim=2, nOut=n_strikes, n_layers=2, vNetWidth=20, n_networks=n_maturities)
 
         # initialise stochastic volatility drift and diffusion neural networks
         self.V_drift = Net_timegrid(dim=1, nOut=1, n_layers=2, vNetWidth=20, n_networks=1)
@@ -42,7 +42,7 @@ class Net_LSV(nn.Module):
         
         # initialise stochastic volatility correlation and initial value parameters
         self.v0 = torch.nn.Parameter(torch.rand(1)*0.1)
-        self.rho = torch.nn.Parameter(torch.ones(1)*(-2))
+        self.rho = torch.nn.Parameter(torch.ones(1)*(-3))
         
         # initialise exotic hedging strategy neural networks 
         """
@@ -386,8 +386,7 @@ def train_nsde(model,z_val,z_val_var,z_test,z_test_var,config):
             
             with torch.no_grad():
                 if args.hedge_exotic: 
-                    _, _,pe_u, pe_h,_, _,_, _, _, _,_ =   model(S0, realised_prices,past_hedges, rate, z_val, MC_samples_price, batch_steps_exotic,n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
-                    _, _,_,_, pe_var_u,pe_var_h, _,_,_,_,_ = model(S0, realised_prices,past_hedges, rate, z_val_var,MC_samples_var, batch_steps_exotic,n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
+                    _, _,pe_u, pe_h,pe_var_u, pe_var_h,_, _, _, _,_ =   model(S0, realised_prices,past_hedges, rate, z_val, MC_samples_price, batch_steps_exotic,n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
                 pv_h, _,_, _,_, _,martingale_test, put_atm, call_atm, put_call_parity_error,_ =   model(S0, realised_prices,past_hedges, rate, z_val, MC_samples_price, batch_steps_daily,n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_daily,gradient_count=gradient_count)
                 _, var_pv_h,_,_, _, _, _,_,_,_,_ = model(S0, realised_prices,past_hedges, rate, z_val_var,MC_samples_var, batch_steps_daily,n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_daily,gradient_count=gradient_count)                 
             
@@ -530,7 +529,7 @@ def train_nsde(model,z_val,z_val_var,z_test,z_test_var,config):
                 optimizer_SDE.step()
 
             # Train Neural Network Corresponding to Exotic Hedging Strategy
-            if args.hedge_exotic: 
+            if args.hedge_exotic and args.train_exotic: 
                 model.S_vol.freeze()
                 model.V_drift.freeze()
                 model.V_vol.freeze()
@@ -557,8 +556,7 @@ def train_nsde(model,z_val,z_val_var,z_test,z_test_var,config):
          
         with torch.no_grad():
             if args.hedge_exotic: 
-                _, _,pe_u_val, pe_h_val,_, _,_, _, _, _, _ = model(S0, realised_prices, past_hedges, rate, z_val, MC_samples_price, T_exotic, n_maturities=n_maturities, maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
-                _, _,_,_, pe_var_u_val,pe_var_h_val, _,_,_,_,_ = model(S0, realised_prices, past_hedges, rate, z_val_var,  MC_samples_var, T_exotic, n_maturities=n_maturities, maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
+                _, _,pe_u_val, pe_h_val,pe_var_u_val, pe_var_h_val,_, _, _, _, _ = model(S0, realised_prices, past_hedges, rate, z_val, MC_samples_price, T_exotic, n_maturities=n_maturities, maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
             pv_h_val, _,_, _,_, _,martingale_test, put_atm, call_atm, put_call_parity_error, _ = model(S0, realised_prices, past_hedges, rate, z_val, MC_samples_price, T_daily, n_maturities=n_maturities,maturity_exotic=maturity_exotic_daily, maturities=maturities_daily,strikes=strikes,timegrid=timegrid_daily,gradient_count=gradient_count)
             _, var_pv_h_val,_,_, _,_, _,_,_,_,_ = model(S0, realised_prices, past_hedges, rate, z_val_var,  MC_samples_var, T_daily, n_maturities=n_maturities, maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_daily,gradient_count=gradient_count)
                 
@@ -664,8 +662,6 @@ def train_nsde(model,z_val,z_val_var,z_test,z_test_var,config):
         if  args.hedge_exotic and pe_var_h_val < best_hedge_error:
             model_best=model
             best_hedge_error=pe_var_h_val
-            print('current_loss', loss_val)
-            print('IV best error',iv_mean_error)
             if args.lookback_exotic:
                 filename = "NSDE_val_hedge_lookback_seed_{}_cal_day_{}.pth.tar".format(seed,cal_day)
                 checkpoint = {"state_dict":model.state_dict(),
@@ -719,8 +715,7 @@ def train_nsde(model,z_val,z_val_var,z_test,z_test_var,config):
 
             with torch.no_grad():
                 if args.hedge_exotic: 
-                    _, _,pe_u_test, pe_h_test,_, _,_, _, _, _, _ =   model(S0, realised_prices, past_hedges, rate, z_test, MC_samples_price, T_exotic, n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
-                    _, _,_,_, pe_var_u_test,pe_var_h_test, _,_,_,_, exotic_hedge_value = model(S0, realised_prices, past_hedges, rate, z_test_var,  MC_samples_var, T_exotic, n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
+                    _, _,pe_u_test, pe_h_test,pe_var_u_test, pe_var_h_test,_, _, _, _, exotic_hedge_value =   model(S0, realised_prices, past_hedges, rate, z_test, MC_samples_price, T_exotic, n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_exotic,gradient_count=gradient_count_exotic)
                 pv_h_test, _,_, _,_, _,martingale_test, put_atm, call_atm, put_call_parity_error, _ =  model(S0,realised_prices, past_hedges, rate, z_test, MC_samples_price, T_daily, n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_daily,gradient_count=gradient_count)
                 _, var_pv_h_test,_,_, _, _, _,_,_,_, _ = model(S0,realised_prices, past_hedges, rate, z_test_var,  MC_samples_var, T_daily, n_maturities=n_maturities,maturities=maturities_daily,maturity_exotic=maturity_exotic_daily,strikes=strikes,timegrid=timegrid_daily,gradient_count=gradient_count)                 
             if args.hedge_exotic:
@@ -754,7 +749,7 @@ def train_nsde(model,z_val,z_val_var,z_test,z_test_var,config):
             rhos = torch.tanh(model.rho)        
                     
             with open("rho_and_v0.txt","a") as f:
-                f.write("{:.4f},{:.4f},{:.4f}\n".format(rhos[0].item(),rhos[-1].item(),V_initial.item()))                      
+                f.write("{:.4f},{:.4f}\n".format(rhos[0].item(),V_initial.item()))                      
                               
             with open("Loss_MSE_Loss_REL_Loss_Vega_Weighted.txt","a") as f:
                  f.write("{:.4f},{:.4f},{:.4f}\n".format(loss_test.item(),loss_test_rel.item(),loss_vega.item() ))
@@ -841,13 +836,14 @@ if __name__ == '__main__':
     MC_samples_var=400000
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', type=int, default=5)
+    parser.add_argument('--device', type=int, default=7)
     parser.add_argument('--MC_samples_price',type=int,default=MC_samples_price)
     parser.add_argument('--MC_samples_var',type=int,default=MC_samples_var)
     parser.add_argument('--tamed_Euler', action='store_true', default=False)
     parser.add_argument('--hedge_exotic',action='store_true', default=False) # initially we only train model to IV data
     parser.add_argument('--lookback_exotic',action='store_true', default=False)
     parser.add_argument('--straddle_exotic',action='store_true', default=False)
+    parser.add_argument('--train_exotic',action='store_true', default=False)
     parser.add_argument('--dynamic_weight_update',action='store_true', default=True)
     args = parser.parse_args()  
 
@@ -866,8 +862,7 @@ if __name__ == '__main__':
     
     maturity_values = np.load("maturities.npy")
     cal_day = np.load("cal_day.npy")
-    realised_prices = torch.tensor(np.load("GOOG_ALL.npy").astype('float32'))[0:cal_day+1].to(device)
-    print('realised_prices',realised_prices)
+    realised_prices = torch.tensor(np.load("GOOG_ALL.npy").astype('float32')).to(device)
     maturity_value_exotic = np.load("maturity_exotic.npy")
     n_maturities = len(maturity_values)
     n_strikes = len(strikes[0,:])
@@ -913,18 +908,21 @@ if __name__ == '__main__':
         model = model.to(device)  
         hedges_straddle = torch.zeros_like(realised_prices).to(device=device).float()
         hedges_lookback = torch.zeros_like(realised_prices).to(device=device).float()
+        realised_prices = realised_prices[0:cal_day+1]
     if cal_day>0:
         checkpoint_str= "NSDE_test_hedge_straddle_seed_{}_cal_day_{}.pth.tar".format(seed,cal_day-1) 
         checkpoint=torch.load(checkpoint_str)
         model.load_state_dict(checkpoint['state_dict'])
         model = model.to(device)
-        if torch.abs(torch.tanh(model.rho.detach().cpu()))>0.9:
+        if torch.abs(torch.tanh(model.rho.detach().cpu()))>0.99: # If rho of the previous model is close to +/-1 lower the value at the next training step
         	model.rho=torch.nn.Parameter(model.rho.detach().cpu()*0.25)
         hedges_straddle = checkpoint['past_hedges']
         checkpoint_str= "NSDE_test_hedge_lookback_seed_{}_cal_day_{}.pth.tar".format(seed,cal_day-1) 
         checkpoint=torch.load(checkpoint_str)
         hedges_lookback = checkpoint['past_hedges']
+        realised_prices = realised_prices[0:cal_day+1]
 
+    print('realised_prices',realised_prices)
     print('hedges_straddle', hedges_straddle)
     print('hedges_lookback', hedges_lookback)
     np.random.seed(seed) # fix seed for reproducibility
@@ -943,7 +941,7 @@ if __name__ == '__main__':
 
     CONFIG_SDE = {"batch_size":50000,
               "batch_size_hedge":10000,
-              "n_epochs":100,
+              "n_epochs":200,
               "cal_day":cal_day,
               "gradient_count":gradient_count,
               "gradient_count_exotic":gradient_count_exotic,    
@@ -967,11 +965,11 @@ if __name__ == '__main__':
               "seed":seed}
                                         
     model_SDE = train_nsde(model, z_val,z_val_var,z_test,z_test_var, CONFIG_SDE)
-  #  model_SDE = model # if model has been trained already 
+   # model_SDE = model # if model has been trained already 
     
     CONFIG_Exotic_Hedge = {"batch_size":50000,
               "batch_size_hedge":10000,
-              "n_epochs":100,
+              "n_epochs":50,
               "cal_day":cal_day,
               "gradient_count":gradient_count,
               "gradient_count_exotic":gradient_count_exotic,             
@@ -997,26 +995,28 @@ if __name__ == '__main__':
     # After SDE is trained to IV data, learn hedging strategies for lookback and ATM straddle
     
     parser = argparse.ArgumentParser()                     
-    parser.add_argument('--device', type=int, default=5)
+    parser.add_argument('--device', type=int, default=7)
     parser.add_argument('--MC_samples_price',type=int,default=MC_samples_price)
     parser.add_argument('--MC_samples_var',type=int,default=MC_samples_var)
     parser.add_argument('--tamed_Euler', action='store_true', default=False)
     parser.add_argument('--hedge_exotic',action='store_true', default=True)
     parser.add_argument('--lookback_exotic',action='store_true', default=True)
     parser.add_argument('--straddle_exotic',action='store_true', default=False)
+    parser.add_argument('--train_exotic',action='store_true', default=True)
     parser.add_argument('--dynamic_weight_update',action='store_true', default=True)
     args = parser.parse_args()                    
     
     model_SDE_hedge_1 = train_nsde(model_SDE, z_val,z_val_var,z_test,z_test_var, CONFIG_Exotic_Hedge)
      
     parser = argparse.ArgumentParser()    
-    parser.add_argument('--device', type=int, default=5)
+    parser.add_argument('--device', type=int, default=7)
     parser.add_argument('--MC_samples_price',type=int,default=MC_samples_price)
     parser.add_argument('--MC_samples_var',type=int,default=MC_samples_var)
     parser.add_argument('--tamed_Euler', action='store_true', default=False)
     parser.add_argument('--hedge_exotic',action='store_true', default=True) 
     parser.add_argument('--lookback_exotic',action='store_true', default=False)
     parser.add_argument('--straddle_exotic',action='store_true', default=True)
+    parser.add_argument('--train_exotic',action='store_true', default=True)
     parser.add_argument('--dynamic_weight_update',action='store_true', default=True)
     args = parser.parse_args() 
                          
