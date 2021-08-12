@@ -49,7 +49,7 @@ function [] = plot_hedge_values_after_day_zero(day,GOOG_date,GOOG_S0,hedge_value
 
    xlabel('Asset Price')
    ylabel('Hedge value')
-   legend('Lookback Hedge','Straddle Hedge', 'Previous Date Lookback Hedge','Previous Date Straddle Hedge','ATM','Location','Best')
+   legend('Lookback Hedge','Straddle Hedge', 'Previous Date Model Lookback Hedge','Previous Date Model Straddle Hedge','ATM','Location','Best')
    plot_title = strcat(' Date:  ', string(GOOG_day(Iday(1))),'.', string(GOOG_month(Iday(1))),'.' ,string(GOOG_year(Iday(1))));
    save_string = strcat('Model_Hedge_Date',string(GOOG_day(Iday(1))),string(GOOG_month(Iday(1))),string(GOOG_year(Iday(1))));
    title(plot_title);
