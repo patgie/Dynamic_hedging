@@ -13,11 +13,11 @@ for i=1:size(maturities,1)-1
 	hedge_values_lookback_temp=csvread(read_string_lookback, 1, 1);
 	hedge_values_straddle_temp=csvread(read_string_straddle, 1, 1);
     if i<size(maturities,1)-1
-        previous_date_model_hedge_values_lookback(i+1,:)=-hedge_values_lookback_temp(:,2);
-        previous_date_model_hedge_values_straddle(i+1,:)=-hedge_values_straddle_temp(:,2);
+        previous_date_model_hedge_values_lookback(i+1,:)=hedge_values_lookback_temp(:,2);
+        previous_date_model_hedge_values_straddle(i+1,:)=hedge_values_straddle_temp(:,2);
     end
-    model_hedge_values_lookback(i,:)=-hedge_values_lookback_temp(:,1);
-	model_hedge_values_straddle(i,:)=-hedge_values_straddle_temp(:,1);
+    model_hedge_values_lookback(i,:)=hedge_values_lookback_temp(:,1);
+	model_hedge_values_straddle(i,:)=hedge_values_straddle_temp(:,1);
 end    
 
 

@@ -138,6 +138,10 @@ if __name__ == '__main__':
     checkpoint=torch.load(checkpoint_str)
     model.load_state_dict(checkpoint['state_dict'])
     model = model.to(device)
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+           print(name, param.data)
+
 
                                
     # get lookback hedge values    
